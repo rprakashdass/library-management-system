@@ -3,73 +3,35 @@
 #include<vector>
 #include<unordered_map>
 #include<algorithm>
-
-/* later for robustness of the system
-static int ID_FOR_AUTHOR = 1;
-
-class Author{
-    private:
-    int authorID;
-    std::string authorName;
-    std::vector<Book> books;
-    public:
-    Author() : authorID(ID_FOR_AUTHOR){}
-    Author(std::string name) : authorID(ID_FOR_AUTHOR), authorName(name) {}
-    Author(std::vector<Book> book) {
-        books.emplace_back(book);
-    }
-};
-*/
-
-/*
-Book:
-
-Attributes: bookID, title, author, isIssued.
-Methods: issueBook(), returnBook() - {not needed as library class is managing}.
-
-Member:
-
-Attributes: memberID, name, booksIssued.
-Methods: issueBook(), returnBook() - {not needed as library class is managing}.
-
-Library:
-
-Attributes: books (list of books), members (list of members).
-Methods: addBook(), removeBook(), searchBook(), issueBook(), returnBook().
-
-        Add methods to:
-        Add/remove books.
-        Add members.
-        Search for books by ID.
-        Issue/return books.
-*/
+#include<memory>
 
 // static variables
 static int ID_FOR_BOOK = 111;
 static int ID_FOR_MEMBER = 111;
+
+// console print elements
+static std::string shell(50, '=');
+static std::string heading(50, '-');
 
 class Book{
 private:
     int bookID;
     std::string title;
     std::string author;
+    public:
     bool isIssued = false;
-public:
     Book(std::string title) : bookID(ID_FOR_BOOK++), title(title), author("Unknown") {}
     Book( std::string title, std::string author)
     : bookID(ID_FOR_BOOK++), title(title), author(author) {}
-    int getBookID() const {return this->bookID;}
-    std::string getBookName() const {return this->title;}
+    int getBookID()  {return this->bookID;}
+    std::string getBookName()  {return this->title;}
     void issueBook(){isIssued = true;}
     void returnBook(){isIssued = false;}
-    void showDetails() const {
+    void showDetails()  {
         std::cout << "Book ID : " << this->bookID << std::endl;
         std::cout << "Book Title : " << this->title << std::endl;
         std::cout << "Book Author : " << this->author << std::endl;
         std::cout << "Book isAvailable : " << ((!this->isIssued) ? "True" : "False") << std::endl;
-    }
-    ~Book() {
-        std::cout << "Book " << title << " destroyed." << std::endl;
     }
 };
 
@@ -78,46 +40,43 @@ class Member{
 private:
     int memberID;
     std::string name;
-    std::vector<Book*> books;
+    std::vector<std::shared_ptr<Book>> books;
 public:
     Member(std::string name) : memberID(ID_FOR_MEMBER++) ,name(name) {}
-    void issueBook(Book* book){
+    void issueBook(std::shared_ptr<Book> book){
         book->issueBook();
         books.emplace_back(book);
     }
-    std::string getName() const {
+    std::string getName()  {
         return this->name;
     }
     int getMemberID(){return this->memberID;}
-    void returnBook(Book* book){
+    void returnBook(std::shared_ptr<Book> book){
         auto it = find(books.begin(), books.end(), book);
         if(it == books.end()) {
             std::cout << "Book not found!" << std::endl;
             return;
         }
-        books.erase(it);
         book->returnBook();
+        books.erase(it);
         std::cout << "Book successfully returned by user!" << std::endl;
     }
-    void showDetails() const {
+    void showDetails()  {
         std::cout << "Member ID : " << this->memberID << std::endl;
-        std::cout << "Member Title : " << this->name << std::endl;
-        std::cout << "Books Issued : ";
-        if(books.empty()) std::cout << 0;
+        std::cout << "Member name : " << this->name << std::endl;
+        if(books.empty()) std::cout << "Books issued : " << 0 << std::endl;
+        else std::cout << "\nList of books received\n" << heading << std::endl;
         std::cout << std::endl;
-        for(Book* book : books){
+        for(std::shared_ptr<Book> book : books){
             book->showDetails();
         }
-    }
-    ~Member(){
-        std::cout << "Member " << name << " destroyed." << std::endl;
     }
 };
 
 class Library{
 private:
-    std::unordered_map<int, Book*> books;
-    std::unordered_map<int, Member*> members;
+    std::unordered_map<int, std::shared_ptr<Book>> books;
+    std::unordered_map<int, std::shared_ptr<Member>> members;
 public:
     /* Member methods */
     void addMember(std::string name){
@@ -125,7 +84,7 @@ public:
             std::cout << "Empty member name entered!\n";
             return;
         }
-        Member* member = new Member(name);
+        std::shared_ptr<Member> member = std::make_shared<Member>(name);
         int id = member->getMemberID();
         if(members.find(id) != members.end()){
             std::cout << "Member already Added!" << std::endl;
@@ -136,7 +95,7 @@ public:
         std::cout << "Member Successfully added!" << std::endl;
     }
     void removeMemberByName(std::string bookName){
-        auto it = searchMemberByName(bookName);
+        auto it = searchMemberByName(bookName, false);
         if(it != members.end()){
             members.erase(it);
             std::cout << "Member successfully removed!" << std::endl;
@@ -153,61 +112,71 @@ public:
         }
         std::cout << "Member not found!" << std::endl;
     }
-    std::unordered_map<int, Member*>::iterator searchMemberById(int id){
+    std::unordered_map<int, std::shared_ptr<Member>>::iterator searchMemberById(int id, bool isConsole){
         auto it = members.find(id);
-        if(it != members.end()){
-            it->second->showDetails();
-        }
-        return it;
-    }
-    std::unordered_map<int, Member*>::iterator searchMemberByName(std::string memberName){
-        std::unordered_map<int, Member*>::iterator it;
-        for(;it != members.end();it++){
-            if(it->second->getName() == memberName){
-                break;
+        if(isConsole){
+            if(it != members.end()){
+                it->second->showDetails();
             }
         }
         return it;
     }
+    std::unordered_map<int, std::shared_ptr<Member>>::iterator searchMemberByName(std::string memberName, bool isConsole){
+        for(auto it = members.begin(); it != members.end(); ++it){
+            if(it->second->getName() == memberName){
+                if(isConsole) it->second->showDetails();
+                return it;
+            }
+        }
+        return members.end();
+    }
     void issueBook(int memberId, int bookId){
-        auto memberIterator = searchMemberById(memberId);
+        auto memberIterator = searchMemberById(memberId, false);
         if(memberIterator == members.end()){
             std::cout << "Member not found!" << std::endl;
             return;
         }
-        auto bookIterator = searchBookById(bookId);
+        auto bookIterator = searchBookById(bookId, false);
         if(bookIterator == books.end()){
             std::cout << "Book not found!" << std::endl;
             return;
         }
-        Book* book = bookIterator->second;
+        std::shared_ptr<Book> book = bookIterator->second;
+        if (book->isIssued) {
+            std::cout << "Book is already issued!" << std::endl;
+            return;
+        }
         memberIterator->second->issueBook(book);
         std::cout << "Book Successfully issued to the member!" << std::endl;
     }
     void returnBook(int memberId, int bookId){
-        auto memberIterator = searchMemberById(memberId);
+        auto memberIterator = searchMemberById(memberId, false);
         if(memberIterator == members.end()){
             std::cout << "Member not found!" << std::endl;
             return;
         }
-        auto bookIterator = searchBookById(bookId);
+        auto bookIterator = searchBookById(bookId, false);
         if(bookIterator == books.end()){
             std::cout << "Book not found!" << std::endl;
             return;
         }
-        Book* book = bookIterator->second;
+        std::shared_ptr<Book> book = bookIterator->second;
         memberIterator->second->returnBook(book);
         std::cout << "Book Successfully returned to the library!" << std::endl;
     }
-    void showMembers() const {
-        if(books.empty()){
-            std::cout << "Currently there is no member in library\nAdd some  member\n";
+    void showMembers()  {
+        std::string design(50, '-');
+        std::cout << design << std::endl;
+        if(members.empty()){
+            std::cout << "Currently there is no member in library\nEnter 2 to add  member\n";
+            std::cout << shell << std::endl;
             return;
         }
         std::cout << "Members in library " << std::endl;
         for(auto it: members){
             it.second->showDetails();
         }
+        std::cout << shell << std::endl;
     }
 
 
@@ -217,7 +186,7 @@ public:
             std::cout << "Empty book title entered!\n";
             return;
         }
-        Book* book = (author.empty()) ? new Book(title) : new Book(title, author);
+        std::shared_ptr<Book> book = (author.empty()) ? std::make_shared<Book>(title) : std::make_shared<Book>(title, author);
         int id = book->getBookID();
         if(books.find(id) != books.end()){
             std::cout << "Book already Added!" << std::endl;
@@ -228,7 +197,7 @@ public:
         std::cout << "Book Successfully added!" << std::endl;
     }
     void removeBookByName(std::string bookName){
-        auto it = searchBookByName(bookName);
+        auto it = searchBookByName(bookName, false);
         if(it != books.end()){
             books.erase(it);
             std::cout << "Book successfully removed!" << std::endl;
@@ -245,44 +214,35 @@ public:
         }
         std::cout << "Book not found!" << std::endl;
     }
-    std::unordered_map<int, Book*>::iterator searchBookById(int id){
+    std::unordered_map<int, std::shared_ptr<Book>>::iterator searchBookById(int id, bool isConsole){
         auto it = books.find(id);
-        if(it != books.end()){
-            it->second->showDetails();
-        }
-        return it;
-    }
-    std::unordered_map<int, Book*>::iterator searchBookByName(std::string bookName){
-        std::unordered_map<int, Book*>::iterator it;
-        for(;it != books.end();it++){
-            if(it->second->getBookName() == bookName){
-                break;
+        if(isConsole){
+            if(it != books.end()){
+                it->second->showDetails();
             }
         }
         return it;
     }
-    void showBooks() const {
+    std::unordered_map<int, std::shared_ptr<Book>>::iterator searchBookByName(std::string bookName, bool isConsole){
+        for(auto it = books.begin(); it != books.end(); it++){
+            if(it->second->getBookName() == bookName){
+                if(isConsole) it->second->showDetails();
+                return it;
+            }
+        }
+        return books.end();
+    }
+    void showBooks()  {
         if(books.empty()){
-            std::cout << "Currently there is no book in library\nSearch for other book\n";
+            std::cout << "OOPS!...\nCurrently there is no book in library\nEnter 1 to add book\n";
+            std::cout << shell << std::endl;
             return;
         }
         std::cout << "Books in Library " << std::endl;
         for(auto it: books){
             it.second->showDetails();
         }
-    }
-
-    /* Destructor */
-    ~Library(){
-        for(auto it: books){
-            delete it.second;
-            it.second = nullptr;
-        }
-        for(auto it: members){
-            delete it.second;
-            it.second = nullptr;
-        }
-        std::cout << "library destructor called" << std::endl;
+        std::cout << shell << std::endl;
     }
 };
 
@@ -343,22 +303,22 @@ int main(){
             case 5:
                 std::cout << "\nEnter book id : ";
                 std::cin >> bookId;
-                library.searchBookById(bookId);
+                library.searchBookById(bookId, true);
                 break;
             case 6:
                 std::cout << "\nEnter book title : ";
                 std::getline(std::cin, title);
-                library.searchBookByName(title);
+                library.searchBookByName(title, true);
                 break;
             case 7:
                 std::cout << "\nEnter member id : ";
                 std::cin >> memberId;
-                library.searchMemberById(memberId);
+                library.searchMemberById(memberId, true);
                 break;
             case 8:
                 std::cout << "\nEnter member name : ";
                 std::getline(std::cin, name);
-                library.searchMemberByName(name);
+                library.searchMemberByName(name, true);
                 break;
             case 9:
                 std::cout << "\nEnter book id : ";
